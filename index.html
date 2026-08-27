@@ -125,6 +125,8 @@ main{padding:14px 20px 10px;}
 .goal-nums{display:flex;justify-content:space-between;margin-top:11px;font-size:12.5px;font-weight:600;color:var(--text-dim);}
 .goal-nums b{color:var(--text);}
 .goal-nums.two{margin-top:6px;}
+.goal-actions{display:flex;align-items:center;gap:2px;}
+.goal-edit{background:none;border:none;color:var(--accent);font-size:14px;padding:0 6px;line-height:1;}
 
 /* Ano tab */
 .year-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
@@ -205,6 +207,7 @@ let state = {
   loading: true,
   txType: 'ganho',
   showGoalForm: false,
+  editingGoalId: null,
   session: null,
   authMode: 'login',   // 'login' | 'cadastro'
   authBusy: false,
@@ -370,7 +373,21 @@ async function deleteTransaction(id){
   if(error){ state.transactions = prev; showToast('Erro ao excluir'); render(); }
 }
 
-function toggleGoalForm(){ state.showGoalForm = !state.showGoalForm; render(); }
+function toggleGoalForm(){
+  state.showGoalForm = !state.showGoalForm;
+  if(!state.showGoalForm) state.editingGoalId = null;
+  render();
+}
+function editGoal(id){
+  state.editingGoalId = id;
+  state.showGoalForm = true;
+  render();
+}
+function cancelGoalForm(){
+  state.showGoalForm = false;
+  state.editingGoalId = null;
+  render();
+}
 async function submitGoal(ev){
   ev.preventDefault();
   const form = ev.target;
@@ -379,21 +396,37 @@ async function submitGoal(ev){
   if(!amount || amount<=0){ showToast('Informe um valor válido'); return; }
   const weekStart = getMonday(dateVal);
   const userId = state.session.user.id;
-  const { data, error } = await supa.from('weekly_goals')
-    .upsert({ user_id:userId, week_start:weekStart, amount }, { onConflict:'user_id,week_start' })
-    .select().single();
-  if(error){ showToast('Erro ao salvar meta'); return; }
-  const existing = state.weeklyGoals.find(g=>g.weekStart===weekStart);
-  if(existing){ existing.amount = Number(data.amount); existing.id = data.id; }
-  else{ state.weeklyGoals.push({ id:data.id, weekStart:data.week_start, amount:Number(data.amount) }); }
+
+  if(state.editingGoalId){
+    // Editando uma meta existente (pode inclusive mover para outra semana)
+    const { data, error } = await supa.from('weekly_goals')
+      .update({ week_start:weekStart, amount })
+      .eq('id', state.editingGoalId)
+      .select().single();
+    if(error){ showToast('Erro ao atualizar meta (já existe outra meta nessa semana?)'); return; }
+    const g = state.weeklyGoals.find(x=>x.id===state.editingGoalId);
+    if(g){ g.weekStart = data.week_start; g.amount = Number(data.amount); }
+    showToast('🎯 Meta atualizada');
+  } else {
+    // Nova meta (uma por semana; se já existir meta pra essa semana, ela é atualizada)
+    const { data, error } = await supa.from('weekly_goals')
+      .upsert({ user_id:userId, week_start:weekStart, amount }, { onConflict:'user_id,week_start' })
+      .select().single();
+    if(error){ showToast('Erro ao salvar meta'); return; }
+    const existing = state.weeklyGoals.find(g=>g.weekStart===weekStart);
+    if(existing){ existing.amount = Number(data.amount); existing.id = data.id; }
+    else{ state.weeklyGoals.push({ id:data.id, weekStart:data.week_start, amount:Number(data.amount) }); }
+    showToast('🎯 Meta salva');
+  }
   state.weeklyGoals.sort((a,b)=>a.weekStart<b.weekStart?-1:1);
-  showToast('🎯 Meta salva');
   state.showGoalForm = false;
+  state.editingGoalId = null;
   render();
 }
 async function deleteGoal(id){
   const prev = state.weeklyGoals;
   state.weeklyGoals = state.weeklyGoals.filter(g=>g.id!==id);
+  if(state.editingGoalId===id){ state.editingGoalId = null; state.showGoalForm = false; }
   render();
   const { error } = await supa.from('weekly_goals').delete().eq('id', id);
   if(error){ state.weeklyGoals = prev; showToast('Erro ao excluir meta'); render(); }
@@ -558,7 +591,7 @@ function renderLancar(){
   </div>`;
 }
 
-function goalCardHtml(weekStart, amount, showDelete, goalId){
+function goalCardHtml(weekStart, amount, goalId){
   const actual = weekActualGanho(weekStart);
   const gasto = weekActualGasto(weekStart);
   const falta = Math.max(0, amount-actual);
@@ -568,7 +601,11 @@ function goalCardHtml(weekStart, amount, showDelete, goalId){
   <div class="card goal-card">
     <div class="goal-head">
       <span class="goal-week"><span class="ic">🎯</span> ${formatDateBR(weekStart)} a ${formatDateBR(end)}</span>
-      ${showDelete ? `<button class="tx-del" onclick="deleteGoal('${goalId}')">×</button>` : ''}
+      ${goalId ? `
+      <span class="goal-actions">
+        <button class="goal-edit" onclick="editGoal('${goalId}')" aria-label="Editar meta">✏️</button>
+        <button class="tx-del" onclick="deleteGoal('${goalId}')" aria-label="Excluir meta">×</button>
+      </span>` : ''}
     </div>
     <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
     <div class="goal-nums">
@@ -586,7 +623,10 @@ function renderMetas(){
   const currentWeekStart = getMonday(todayStr());
   const currentGoal = state.weeklyGoals.find(g=>g.weekStart===currentWeekStart);
   const currentPlanned = currentGoal ? currentGoal.amount : 0;
-  const weekEnd = addDays(currentWeekStart,6);
+
+  const editingGoal = state.editingGoalId ? state.weeklyGoals.find(g=>g.id===state.editingGoalId) : null;
+  const formDate = editingGoal ? editingGoal.weekStart : todayStr();
+  const formAmount = editingGoal ? editingGoal.amount : '';
 
   const outras = state.weeklyGoals
     .filter(g=>g.weekStart!==currentWeekStart)
@@ -598,23 +638,25 @@ function renderMetas(){
   ${state.showGoalForm ? `
   <div class="card" style="margin-bottom:14px;">
     <form onsubmit="submitGoal(event)">
+      ${editingGoal ? `<div class="empty-note" style="padding:0 0 10px;text-align:left;">Editando meta existente</div>` : ''}
       <div class="field">
         <label>Qualquer data da semana desejada</label>
-        <input type="date" name="refDate" value="${todayStr()}" required>
+        <input type="date" name="refDate" value="${formDate}" required>
       </div>
       <div class="field">
         <label>Valor planejado (R$)</label>
-        <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required value="${currentGoal?currentGoal.amount:''}">
+        <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required value="${formAmount}">
       </div>
-      <button class="btn-primary" type="submit">Salvar meta</button>
+      <button class="btn-primary" type="submit">${editingGoal ? 'Salvar alterações' : 'Salvar meta'}</button>
+      ${editingGoal ? `<button type="button" class="pill-btn" style="margin-top:8px;width:100%;text-align:center;" onclick="cancelGoalForm()">Cancelar edição</button>` : ''}
     </form>
   </div>` : ''}
 
-  ${goalCardHtml(currentWeekStart, currentPlanned, false, null)}
+  ${goalCardHtml(currentWeekStart, currentPlanned, currentGoal ? currentGoal.id : null)}
 
   <div class="section-title">Outras metas</div>
   ${outras.length===0 ? `<div class="card"><div class="empty-note">Nenhuma outra meta cadastrada</div></div>` :
-    outras.map(g=>goalCardHtml(g.weekStart, g.amount, true, g.id)).join('')}
+    outras.map(g=>goalCardHtml(g.weekStart, g.amount, g.id)).join('')}
   `;
 }
 
