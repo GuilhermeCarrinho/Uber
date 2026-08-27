@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Meu Caixa</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --bg:#F5F3FA;
+  --card:#FFFFFF;
+  --text:#2B2640;
+  --text-dim:#948DB0;
+  --ganho:#1FBE83;
+  --ganho-soft:#E1FAEF;
+  --gasto:#FF6B5E;
+  --gasto-soft:#FFEAE7;
+  --accent:#7C6CF7;
+  --accent-soft:#EEEAFE;
+  --gold:#FFB648;
+  --gold-soft:#FFF3E0;
+  --line:#EDEAF6;
+  --radius:22px;
+  --radius-sm:14px;
+  --shadow:0 10px 28px rgba(43,38,64,0.08);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Plus Jakarta Sans',sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;padding-bottom:106px;}
+
+header.topbar{padding:26px 20px 6px;display:flex;align-items:center;justify-content:space-between;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand .logo{
+  width:38px;height:38px;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--ganho));
+  display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:var(--shadow);
+}
+.brand h1{font-family:'Baloo 2',sans-serif;font-weight:700;font-size:20px;margin:0;color:var(--text);}
+.brand .eyebrow{font-size:11.5px;color:var(--text-dim);font-weight:600;margin-top:1px;}
+.logout-btn{background:var(--card);border:none;border-radius:50%;width:36px;height:36px;box-shadow:var(--shadow);font-size:15px;color:var(--text-dim);}
+
+main{padding:14px 20px 10px;}
+
+/* Balance hero card */
+.hero{
+  border-radius:28px;padding:24px 22px 20px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg, var(--accent-soft) 0%, var(--ganho-soft) 100%);
+  box-shadow:var(--shadow);
+}
+.hero::after{
+  content:'';position:absolute;width:180px;height:180px;border-radius:50%;
+  background:rgba(255,255,255,.35);top:-90px;right:-60px;
+}
+.hero-top{display:flex;align-items:center;gap:8px;position:relative;z-index:1;}
+.hero-badge{width:34px;height:34px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 4px 10px rgba(43,38,64,.08);}
+.hero-label{font-size:12.5px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;}
+.hero-amount{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:42px;margin-top:8px;position:relative;z-index:1;color:var(--text);}
+.hero-amount.neg{color:var(--gasto);}
+.hero-note{font-size:13px;color:var(--text-dim);font-weight:600;margin-top:2px;position:relative;z-index:1;}
+.hero-stats{display:flex;gap:10px;margin-top:18px;position:relative;z-index:1;}
+.hero-stat{flex:1;background:rgba(255,255,255,.65);border-radius:16px;padding:11px 12px;display:flex;align-items:center;gap:9px;}
+.hero-stat .ic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.hero-stat.g .ic{background:var(--ganho-soft);}
+.hero-stat.d .ic{background:var(--gasto-soft);}
+.hero-stat .txt{min-width:0;}
+.hero-stat .k{font-size:10.5px;color:var(--text-dim);font-weight:700;text-transform:uppercase;}
+.hero-stat .v{font-family:'Baloo 2';font-weight:700;font-size:16px;}
+.hero-stat.g .v{color:var(--ganho);}
+.hero-stat.d .v{color:var(--gasto);}
+
+.section-title{font-family:'Baloo 2';font-weight:700;font-size:15.5px;color:var(--text);margin:24px 2px 10px;display:flex;align-items:center;justify-content:space-between;}
+.pill-btn{font-family:'Plus Jakarta Sans';font-weight:700;font-size:12px;color:var(--accent);background:var(--accent-soft);border:none;border-radius:20px;padding:6px 13px;}
+
+.card{background:var(--card);border-radius:var(--radius);padding:16px 17px;box-shadow:var(--shadow);}
+
+.tx-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line);}
+.tx-row:last-child{border-bottom:none;}
+.tx-ic{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.tx-ic.g{background:var(--ganho-soft);}
+.tx-ic.d{background:var(--gasto-soft);}
+.tx-mid{flex:1;min-width:0;}
+.tx-desc{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tx-date{font-size:11.5px;color:var(--text-dim);font-weight:600;margin-top:1px;}
+.tx-amt{font-family:'Baloo 2';font-weight:700;font-size:15px;white-space:nowrap;}
+.tx-amt.g{color:var(--ganho);}
+.tx-amt.d{color:var(--gasto);}
+.tx-del{background:none;border:none;color:var(--text-dim);font-size:18px;padding:0 0 0 8px;line-height:1;}
+.empty-note{color:var(--text-dim);font-size:13.5px;font-weight:600;text-align:center;padding:22px 6px;}
+
+/* Forms */
+.field{margin-bottom:13px;}
+.field label{display:block;font-size:11.5px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.02em;margin-bottom:6px;}
+.field input{
+  width:100%;background:var(--bg);border:2px solid var(--line);border-radius:14px;
+  padding:12px 13px;color:var(--text);font-family:'Plus Jakarta Sans';font-weight:600;font-size:15.5px;
+}
+.field input:focus{outline:none;border-color:var(--accent);}
+.field-err{color:var(--gasto);font-size:12px;font-weight:600;margin-top:6px;min-height:0;}
+.seg{display:flex;gap:8px;border-radius:16px;margin-bottom:15px;}
+.seg button{flex:1;padding:12px 0;border:2px solid var(--line);border-radius:14px;background:var(--card);color:var(--text-dim);font-family:'Baloo 2';font-weight:700;font-size:14px;}
+.seg button.active.ganho{background:var(--ganho-soft);border-color:var(--ganho);color:var(--ganho);}
+.seg button.active.gasto{background:var(--gasto-soft);border-color:var(--gasto);color:var(--gasto);}
+.btn-primary{
+  width:100%;padding:14px 0;border-radius:16px;border:none;
+  background:linear-gradient(135deg,var(--accent),#9B8CFF);color:#fff;font-family:'Baloo 2';font-weight:700;
+  font-size:15px;box-shadow:0 8px 18px rgba(124,108,247,.32);
+}
+.btn-primary:disabled{opacity:.6;}
+.btn-ghost{width:100%;padding:12px 0;border-radius:14px;border:2px solid var(--line);background:none;color:var(--text-dim);font-family:'Plus Jakarta Sans';font-weight:700;font-size:13px;margin-top:8px;}
+
+.bar-track{height:10px;border-radius:20px;background:var(--line);overflow:hidden;margin-top:10px;}
+.bar-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--ganho),#5FE3B3);}
+.bar-fill.amber{background:linear-gradient(90deg,var(--gold),#FFCB80);}
+
+.goal-card{margin-bottom:12px;}
+.goal-head{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.goal-week{font-family:'Baloo 2';font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:8px;}
+.goal-week .ic{width:30px;height:30px;border-radius:50%;background:var(--gold-soft);display:flex;align-items:center;justify-content:center;font-size:14px;}
+.goal-nums{display:flex;justify-content:space-between;margin-top:11px;font-size:12.5px;font-weight:600;color:var(--text-dim);}
+.goal-nums b{color:var(--text);}
+.goal-nums.two{margin-top:6px;}
+
+/* Ano tab */
+.year-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.year-nav button{background:var(--card);border:none;color:var(--text);border-radius:50%;width:38px;height:38px;font-size:17px;box-shadow:var(--shadow);font-weight:700;}
+.year-nav .yr{font-family:'Baloo 2';font-weight:800;font-size:22px;}
+.month-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}
+.month-row:last-child{border-bottom:none;}
+.month-name{width:36px;font-weight:700;font-size:12px;color:var(--text-dim);flex-shrink:0;}
+.month-bars{flex:1;display:flex;flex-direction:column;gap:5px;}
+.mb-row{display:flex;align-items:center;gap:7px;}
+.mb-track{flex:1;height:8px;border-radius:10px;background:var(--line);overflow:hidden;}
+.mb-fill{height:100%;border-radius:10px;}
+.mb-val{font-size:11px;font-weight:700;width:62px;text-align:right;flex-shrink:0;}
+
+/* Bottom nav */
+.navbar{
+  position:fixed;left:0;right:0;bottom:14px;max-width:440px;margin:0 auto;
+  display:flex;gap:4px;background:var(--card);border-radius:24px;padding:8px;
+  box-shadow:0 12px 30px rgba(43,38,64,.16);
+}
+.navkey{flex:1;padding:9px 2px;border:none;background:transparent;border-radius:18px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;font-family:'Plus Jakarta Sans';}
+.navkey .ic{font-size:19px;}
+.navkey .label{font-size:10.5px;font-weight:700;color:var(--text-dim);}
+.navkey.active{background:var(--tabcolor-soft);}
+.navkey.active .label{color:var(--tabcolor);}
+
+.toast{
+  position:fixed;left:50%;bottom:118px;transform:translateX(-50%);
+  background:var(--text);color:#fff;font-weight:600;
+  font-size:12.5px;padding:10px 18px;border-radius:20px;
+  opacity:0;transition:opacity .25s;pointer-events:none;z-index:50;
+}
+.toast.show{opacity:1;}
+
+/* Auth */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.auth-box{max-width:380px;width:100%;}
+.auth-logo{width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,var(--accent),var(--ganho));
+  display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:var(--shadow);margin:0 auto 14px;}
+.auth-title{font-family:'Baloo 2';font-weight:800;font-size:24px;text-align:center;margin-bottom:2px;}
+.auth-sub{font-size:13px;color:var(--text-dim);font-weight:600;text-align:center;margin-bottom:22px;}
+.auth-tabs{display:flex;gap:8px;background:var(--card);border-radius:16px;padding:6px;margin-bottom:18px;box-shadow:var(--shadow);}
+.auth-tabs button{flex:1;padding:10px 0;border:none;border-radius:12px;background:transparent;color:var(--text-dim);font-family:'Baloo 2';font-weight:700;font-size:13.5px;}
+.auth-tabs button.active{background:var(--accent-soft);color:var(--accent);}
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// =====================================================================
+// CONFIGURAÇÃO DO SUPABASE — troque pelos dados do SEU projeto
+// (Project Settings -> API, no painel do Supabase)
+// =====================================================================
+const SUPABASE_URL = 'https://kpgsglrqmoprredxcabf.supabase.co/rest/v1/';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwZ3NnbHJxbW9wcnJlZHhjYWJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3ODg1ODcsImV4cCI6MjEwMzM2NDU4N30.8Wf6zqf2s8_mUbrMiSKCx2FDIqcd9iOKRAFxe3145NU';
+
+const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+const MESES_LONGO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const TAB_COLORS = {
+  painel: {color:'#7C6CF7', soft:'#EEEAFE'},
+  lancar: {color:'#1FBE83', soft:'#E1FAEF'},
+  metas:  {color:'#FFB648', soft:'#FFF3E0'},
+  ano:    {color:'#FF6B5E', soft:'#FFEAE7'}
+};
+
+let state = {
+  tab: 'painel',
+  transactions: [],
+  weeklyGoals: [],
+  year: new Date().getFullYear(),
+  loading: true,
+  txType: 'ganho',
+  showGoalForm: false,
+  session: null,
+  authMode: 'login',   // 'login' | 'cadastro'
+  authBusy: false,
+  authError: ''
+};
+
+// ---------- helpers ----------
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function formatBRL(n){ return (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function formatDateBR(d){ const [y,m,day]=d.split('-'); return `${day}/${m}`; }
+function getMonday(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const day = d.getDay();
+  const diff = (day===0? -6 : 1-day);
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+function addDays(dateStr,n){
+  const d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+
+function monthTotals(ym){
+  const trans = state.transactions.filter(t=>t.date.slice(0,7)===ym);
+  const ganho = trans.filter(t=>t.type==='ganho').reduce((s,t)=>s+t.amount,0);
+  const gasto = trans.filter(t=>t.type==='gasto').reduce((s,t)=>s+t.amount,0);
+  return {ganho,gasto,saldo:ganho-gasto};
+}
+function weeklyGoalsForMonth(ym){
+  return state.weeklyGoals.filter(g=>g.weekStart.slice(0,7)===ym).sort((a,b)=>a.weekStart<b.weekStart?-1:1);
+}
+function weekActual(weekStart,type){
+  const end = addDays(weekStart,6);
+  return state.transactions.filter(t=>t.type===type && t.date>=weekStart && t.date<=end)
+    .reduce((s,t)=>s+t.amount,0);
+}
+function weekActualGanho(weekStart){ return weekActual(weekStart,'ganho'); }
+function weekActualGasto(weekStart){ return weekActual(weekStart,'gasto'); }
+function monthlyGoal(ym){
+  const goalsSum = weeklyGoalsForMonth(ym).reduce((s,g)=>s+g.amount,0);
+  const {gasto} = monthTotals(ym);
+  return goalsSum + gasto;
+}
+
+// ---------- Supabase: auth ----------
+async function initAuth(){
+  const { data: { session } } = await supa.auth.getSession();
+  state.session = session;
+  supa.auth.onAuthStateChange((_event, session)=>{
+    state.session = session;
+    if(session){ loadAll(); }
+    else{
+      state.transactions = [];
+      state.weeklyGoals = [];
+      state.loading = false;
+      render();
+    }
+  });
+  if(session){ await loadAll(); }
+  else{ state.loading = false; render(); }
+}
+
+function setAuthMode(mode){ state.authMode = mode; state.authError=''; render(); }
+
+async function submitAuth(ev){
+  ev.preventDefault();
+  const form = ev.target;
+  const email = form.email.value.trim();
+  const password = form.password.value;
+  if(!email || !password){ state.authError='Preencha e-mail e senha'; render(); return; }
+  if(password.length<6){ state.authError='A senha precisa ter ao menos 6 caracteres'; render(); return; }
+  state.authBusy = true; state.authError=''; render();
+  try{
+    if(state.authMode==='cadastro'){
+      const { error } = await supa.auth.signUp({ email, password });
+      if(error) throw error;
+      showToast('✅ Conta criada! Verifique seu e-mail se a confirmação estiver ativa.');
+    }else{
+      const { error } = await supa.auth.signInWithPassword({ email, password });
+      if(error) throw error;
+      showToast('👋 Bem-vindo de volta!');
+    }
+  }catch(e){
+    state.authError = traduzErroAuth(e.message);
+  }finally{
+    state.authBusy = false; render();
+  }
+}
+function traduzErroAuth(msg){
+  if(!msg) return 'Não foi possível continuar. Tente novamente.';
+  if(/invalid login credentials/i.test(msg)) return 'E-mail ou senha inválidos.';
+  if(/already registered|user already exists/i.test(msg)) return 'Este e-mail já está cadastrado.';
+  if(/password/i.test(msg) && /6/.test(msg)) return 'A senha precisa ter ao menos 6 caracteres.';
+  return msg;
+}
+async function logout(){
+  await supa.auth.signOut();
+  showToast('Até logo! 👋');
+}
+
+// ---------- Supabase: dados ----------
+async function loadAll(){
+  state.loading = true; render();
+  try{
+    const [{data:tx, error:e1}, {data:goals, error:e2}] = await Promise.all([
+      supa.from('transactions').select('*').order('date',{ascending:false}),
+      supa.from('weekly_goals').select('*')
+    ]);
+    if(e1) throw e1;
+    if(e2) throw e2;
+    state.transactions = (tx||[]).map(r=>({ id:r.id, type:r.type, amount:Number(r.amount), desc:r.description || '', date:r.date }));
+    state.weeklyGoals = (goals||[]).map(r=>({ id:r.id, weekStart:r.week_start, amount:Number(r.amount) }))
+      .sort((a,b)=>a.weekStart<b.weekStart?-1:1);
+  }catch(e){
+    showToast('Erro ao carregar dados');
+  }
+  state.loading = false;
+  render();
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+// ---------- actions ----------
+function setTab(tab){ state.tab = tab; render(); }
+function setTxType(type){ state.txType = type; render(); }
+
+async function submitTransaction(ev){
+  ev.preventDefault();
+  const form = ev.target;
+  const amount = parseFloat(form.amount.value.replace(',','.'));
+  const desc = form.desc.value.trim();
+  const date = form.date.value || todayStr();
+  if(!amount || amount<=0){ showToast('Informe um valor válido'); return; }
+  const userId = state.session.user.id;
+  const payload = {
+    type: state.txType,
+    amount,
+    description: desc || (state.txType==='ganho'?'Ganho':'Gasto'),
+    date,
+    user_id: userId
+  };
+  const { data, error } = await supa.from('transactions').insert(payload).select().single();
+  if(error){ showToast('Erro ao salvar lançamento'); return; }
+  state.transactions.unshift({ id:data.id, type:data.type, amount:Number(data.amount), desc:data.description, date:data.date });
+  showToast(state.txType==='ganho' ? '✅ Ganho registrado' : '✅ Gasto registrado');
+  form.reset();
+  render();
+}
+async function deleteTransaction(id){
+  const prev = state.transactions;
+  state.transactions = state.transactions.filter(t=>t.id!==id);
+  render();
+  const { error } = await supa.from('transactions').delete().eq('id', id);
+  if(error){ state.transactions = prev; showToast('Erro ao excluir'); render(); }
+}
+
+function toggleGoalForm(){ state.showGoalForm = !state.showGoalForm; render(); }
+async function submitGoal(ev){
+  ev.preventDefault();
+  const form = ev.target;
+  const dateVal = form.refDate.value || todayStr();
+  const amount = parseFloat(form.amount.value.replace(',','.'));
+  if(!amount || amount<=0){ showToast('Informe um valor válido'); return; }
+  const weekStart = getMonday(dateVal);
+  const userId = state.session.user.id;
+  const { data, error } = await supa.from('weekly_goals')
+    .upsert({ user_id:userId, week_start:weekStart, amount }, { onConflict:'user_id,week_start' })
+    .select().single();
+  if(error){ showToast('Erro ao salvar meta'); return; }
+  const existing = state.weeklyGoals.find(g=>g.weekStart===weekStart);
+  if(existing){ existing.amount = Number(data.amount); existing.id = data.id; }
+  else{ state.weeklyGoals.push({ id:data.id, weekStart:data.week_start, amount:Number(data.amount) }); }
+  state.weeklyGoals.sort((a,b)=>a.weekStart<b.weekStart?-1:1);
+  showToast('🎯 Meta salva');
+  state.showGoalForm = false;
+  render();
+}
+async function deleteGoal(id){
+  const prev = state.weeklyGoals;
+  state.weeklyGoals = state.weeklyGoals.filter(g=>g.id!==id);
+  render();
+  const { error } = await supa.from('weekly_goals').delete().eq('id', id);
+  if(error){ state.weeklyGoals = prev; showToast('Erro ao excluir meta'); render(); }
+}
+function changeYear(delta){ state.year += delta; render(); }
+
+// ---------- render pieces ----------
+function renderNavbar(){
+  const tabs = [
+    {id:'painel', ic:'💰', label:'Painel'},
+    {id:'lancar', ic:'➕', label:'Lançar'},
+    {id:'metas', ic:'🎯', label:'Metas'},
+    {id:'ano', ic:'📅', label:'Ano'}
+  ];
+  return `<div class="navbar">
+    ${tabs.map(t=>{
+      const c = TAB_COLORS[t.id];
+      const active = state.tab===t.id;
+      return `<button class="navkey ${active?'active':''}" style="${active?`--tabcolor:${c.color};--tabcolor-soft:${c.soft};`:''}" onclick="setTab('${t.id}')">
+        <span class="ic">${t.ic}</span>
+        <span class="label">${t.label}</span>
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderHeader(){
+  return `<header class="topbar">
+    <div class="brand">
+      <div class="logo">🐷</div>
+      <div>
+        <h1>Meu Caixa</h1>
+        <div class="eyebrow">${state.session ? (state.session.user.email||'') : 'seu dinheiro, sem enrolação'}</div>
+      </div>
+    </div>
+    ${state.session ? `<button class="logout-btn" onclick="logout()" title="Sair">↪</button>` : ''}
+  </header>`;
+}
+
+function renderAuth(){
+  const m = state.authMode;
+  return `
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <div class="auth-logo">🐷</div>
+      <div class="auth-title">Meu Caixa</div>
+      <div class="auth-sub">seu dinheiro, sem enrolação</div>
+      <div class="auth-tabs">
+        <button class="${m==='login'?'active':''}" onclick="setAuthMode('login')">Entrar</button>
+        <button class="${m==='cadastro'?'active':''}" onclick="setAuthMode('cadastro')">Cadastrar</button>
+      </div>
+      <div class="card">
+        <form onsubmit="submitAuth(event)">
+          <div class="field">
+            <label>E-mail</label>
+            <input type="email" name="email" placeholder="voce@email.com" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label>Senha</label>
+            <input type="password" name="password" placeholder="mínimo 6 caracteres" required autocomplete="${m==='login'?'current-password':'new-password'}">
+            <div class="field-err">${state.authError||''}</div>
+          </div>
+          <button class="btn-primary" type="submit" ${state.authBusy?'disabled':''}>
+            ${state.authBusy ? 'Aguarde...' : (m==='login' ? 'Entrar' : 'Criar conta')}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderPainel(){
+  const ym = todayStr().slice(0,7);
+  const {ganho,gasto,saldo} = monthTotals(ym);
+  const meta = monthlyGoal(ym);
+  const metaPct = meta>0 ? Math.min(100, Math.round((ganho/meta)*100)) : 0;
+  const metaFalta = Math.max(0, meta-ganho);
+  const recentes = [...state.transactions].sort((a,b)=>b.date<a.date?-1:1).slice(0,6);
+  const nota = saldo>=0 ? 'Você está no azul esse mês 🎉' : 'Fique de olho, saldo negativo 👀';
+
+  return `
+  <div class="hero">
+    <div class="hero-top">
+      <div class="hero-badge">🐷</div>
+      <div class="hero-label">Saldo de ${MESES_LONGO[new Date().getMonth()]}</div>
+    </div>
+    <div class="hero-amount ${saldo<0?'neg':''}">${formatBRL(saldo)}</div>
+    <div class="hero-note">${nota}</div>
+    <div class="hero-stats">
+      <div class="hero-stat g"><div class="ic">📈</div><div class="txt"><div class="k">Ganhos</div><div class="v">${formatBRL(ganho)}</div></div></div>
+      <div class="hero-stat d"><div class="ic">📉</div><div class="txt"><div class="k">Gastos</div><div class="v">${formatBRL(gasto)}</div></div></div>
+    </div>
+  </div>
+
+  <div class="section-title">Meta mensal</div>
+  <div class="card">
+    <div class="goal-nums" style="margin-top:0;">
+      <span>Metas semanais + gastos</span><b>${formatBRL(meta)}</b>
+    </div>
+    <div class="bar-track"><div class="bar-fill amber" style="width:${metaPct}%"></div></div>
+    <div class="goal-nums"><span>Ganho no mês</span><b style="color:var(--ganho)">${metaPct}% da meta</b></div>
+    <div class="goal-nums two"><span>Falta para bater a meta</span><b style="color:var(--gold)">${formatBRL(metaFalta)}</b></div>
+  </div>
+
+  <div class="section-title">Últimos lançamentos</div>
+  <div class="card">
+    ${recentes.length===0 ? `<div class="empty-note">Nenhum lançamento ainda — bora começar? 🚀</div>` :
+      recentes.map(t=>`
+      <div class="tx-row">
+        <div class="tx-ic ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'📈':'📉'}</div>
+        <div class="tx-mid">
+          <div class="tx-desc">${escapeHtml(t.desc)}</div>
+          <div class="tx-date">${formatDateBR(t.date)}</div>
+        </div>
+        <div class="tx-amt ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'+':'-'} ${formatBRL(t.amount)}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderLancar(){
+  const doMonth = todayStr().slice(0,7);
+  const list = state.transactions
+    .filter(t=>t.date.slice(0,7)===doMonth)
+    .sort((a,b)=>b.date<a.date?-1:1);
+
+  return `
+  <div class="card">
+    <form onsubmit="submitTransaction(event)">
+      <div class="seg">
+        <button type="button" class="${state.txType==='ganho'?'active ganho':''}" onclick="setTxType('ganho')">📈 Ganho</button>
+        <button type="button" class="${state.txType==='gasto'?'active gasto':''}" onclick="setTxType('gasto')">📉 Gasto</button>
+      </div>
+      <div class="field">
+        <label>Valor (R$)</label>
+        <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required>
+      </div>
+      <div class="field">
+        <label>Descrição</label>
+        <input type="text" name="desc" placeholder="${state.txType==='ganho'?'Ex: freelance, salário...':'Ex: mercado, transporte...'}">
+      </div>
+      <div class="field">
+        <label>Data</label>
+        <input type="date" name="date" value="${todayStr()}">
+      </div>
+      <button class="btn-primary" type="submit">Registrar</button>
+    </form>
+  </div>
+
+  <div class="section-title">Lançamentos de ${MESES_LONGO[new Date().getMonth()]}</div>
+  <div class="card">
+    ${list.length===0 ? `<div class="empty-note">Nenhum lançamento este mês</div>` :
+      list.map(t=>`
+      <div class="tx-row">
+        <div class="tx-ic ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'📈':'📉'}</div>
+        <div class="tx-mid">
+          <div class="tx-desc">${escapeHtml(t.desc)}</div>
+          <div class="tx-date">${formatDateBR(t.date)}</div>
+        </div>
+        <div class="tx-amt ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'+':'-'} ${formatBRL(t.amount)}</div>
+        <button class="tx-del" onclick="deleteTransaction('${t.id}')">×</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+function goalCardHtml(weekStart, amount, showDelete, goalId){
+  const actual = weekActualGanho(weekStart);
+  const gasto = weekActualGasto(weekStart);
+  const falta = Math.max(0, amount-actual);
+  const pct = amount>0 ? Math.min(100, Math.round((actual/amount)*100)) : 0;
+  const end = addDays(weekStart,6);
+  return `
+  <div class="card goal-card">
+    <div class="goal-head">
+      <span class="goal-week"><span class="ic">🎯</span> ${formatDateBR(weekStart)} a ${formatDateBR(end)}</span>
+      ${showDelete ? `<button class="tx-del" onclick="deleteGoal('${goalId}')">×</button>` : ''}
+    </div>
+    <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+    <div class="goal-nums">
+      <span>Planejado: <b>${formatBRL(amount)}</b></span>
+      <span>Ganho: <b style="color:var(--ganho)">${formatBRL(actual)}</b></span>
+    </div>
+    <div class="goal-nums two">
+      <span>Gasto: <b style="color:var(--gasto)">${formatBRL(gasto)}</b></span>
+      <span>Falta: <b style="color:var(--gold)">${formatBRL(falta)}</b></span>
+    </div>
+  </div>`;
+}
+
+function renderMetas(){
+  const currentWeekStart = getMonday(todayStr());
+  const currentGoal = state.weeklyGoals.find(g=>g.weekStart===currentWeekStart);
+  const currentPlanned = currentGoal ? currentGoal.amount : 0;
+  const weekEnd = addDays(currentWeekStart,6);
+
+  const outras = state.weeklyGoals
+    .filter(g=>g.weekStart!==currentWeekStart)
+    .sort((a,b)=>b.weekStart<a.weekStart?-1:1);
+
+  return `
+  <div class="section-title">Semana atual<span class="pill-btn" onclick="toggleGoalForm()">${state.showGoalForm?'fechar':'+ nova meta'}</span></div>
+
+  ${state.showGoalForm ? `
+  <div class="card" style="margin-bottom:14px;">
+    <form onsubmit="submitGoal(event)">
+      <div class="field">
+        <label>Qualquer data da semana desejada</label>
+        <input type="date" name="refDate" value="${todayStr()}" required>
+      </div>
+      <div class="field">
+        <label>Valor planejado (R$)</label>
+        <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required value="${currentGoal?currentGoal.amount:''}">
+      </div>
+      <button class="btn-primary" type="submit">Salvar meta</button>
+    </form>
+  </div>` : ''}
+
+  ${goalCardHtml(currentWeekStart, currentPlanned, false, null)}
+
+  <div class="section-title">Outras metas</div>
+  ${outras.length===0 ? `<div class="card"><div class="empty-note">Nenhuma outra meta cadastrada</div></div>` :
+    outras.map(g=>goalCardHtml(g.weekStart, g.amount, true, g.id)).join('')}
+  `;
+}
+
+function renderAno(){
+  const year = state.year;
+  let maxVal = 1;
+  const rows = [];
+  for(let m=0;m<12;m++){
+    const ym = `${year}-${pad2(m+1)}`;
+    const t = monthTotals(ym);
+    maxVal = Math.max(maxVal, t.ganho, t.gasto);
+    rows.push({m,...t});
+  }
+  const yearGanho = rows.reduce((s,r)=>s+r.ganho,0);
+  const yearGasto = rows.reduce((s,r)=>s+r.gasto,0);
+
+  return `
+  <div class="year-nav">
+    <button onclick="changeYear(-1)">‹</button>
+    <span class="yr">${year}</span>
+    <button onclick="changeYear(1)">›</button>
+  </div>
+
+  <div class="hero" style="margin-bottom:18px;">
+    <div class="hero-top">
+      <div class="hero-badge">📅</div>
+      <div class="hero-label">Saldo do ano</div>
+    </div>
+    <div class="hero-amount ${ (yearGanho-yearGasto)<0?'neg':''}" style="font-size:34px;">${formatBRL(yearGanho-yearGasto)}</div>
+    <div class="hero-stats">
+      <div class="hero-stat g"><div class="ic">📈</div><div class="txt"><div class="k">Ganhos</div><div class="v">${formatBRL(yearGanho)}</div></div></div>
+      <div class="hero-stat d"><div class="ic">📉</div><div class="txt"><div class="k">Gastos</div><div class="v">${formatBRL(yearGasto)}</div></div></div>
+    </div>
+  </div>
+
+  <div class="section-title">Por mês</div>
+  <div class="card">
+    ${rows.map(r=>`
+      <div class="month-row">
+        <div class="month-name">${MESES[r.m]}</div>
+        <div class="month-bars">
+          <div class="mb-row">
+            <div class="mb-track"><div class="mb-fill" style="width:${(r.ganho/maxVal)*100}%;background:var(--ganho);"></div></div>
+            <div class="mb-val" style="color:var(--ganho)">${formatBRL(r.ganho)}</div>
+          </div>
+          <div class="mb-row">
+            <div class="mb-track"><div class="mb-fill" style="width:${(r.gasto/maxVal)*100}%;background:var(--gasto);"></div></div>
+            <div class="mb-val" style="color:var(--gasto)">${formatBRL(r.gasto)}</div>
+          </div>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- main render ----------
+function render(){
+  const app = document.getElementById('app');
+
+  if(state.loading){
+    app.innerHTML = `<div class="auth-wrap"><div class="auth-box"><div class="auth-logo">🐷</div><div class="auth-title">Meu Caixa</div><div class="auth-sub">Carregando...</div></div></div>`;
+    return;
+  }
+
+  if(!state.session){
+    app.innerHTML = renderAuth();
+    return;
+  }
+
+  let body = '';
+  if(state.tab==='painel') body = renderPainel();
+  else if(state.tab==='lancar') body = renderLancar();
+  else if(state.tab==='metas') body = renderMetas();
+  else if(state.tab==='ano') body = renderAno();
+
+  app.innerHTML = `${renderHeader()}<main>${body}</main>${renderNavbar()}`;
+}
+
+initAuth();
+</script>
+</body>
+</html>
