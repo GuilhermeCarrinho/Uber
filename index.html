@@ -91,6 +91,8 @@ main{padding:14px 20px 10px;}
 .tx-amt.g{color:var(--ganho);}
 .tx-amt.d{color:var(--gasto);}
 .tx-del{background:none;border:none;color:var(--text-dim);font-size:18px;padding:0 0 0 8px;line-height:1;}
+.tx-actions{display:flex;align-items:center;gap:0;}
+.tx-edit{background:none;border:none;color:var(--accent);font-size:14px;padding:0 0 0 8px;line-height:1;}
 .empty-note{color:var(--text-dim);font-size:13.5px;font-weight:600;text-align:center;padding:22px 6px;}
 
 /* Forms */
@@ -208,6 +210,7 @@ let state = {
   txType: 'ganho',
   showGoalForm: false,
   editingGoalId: null,
+  editingTxId: null,
   session: null,
   authMode: 'login',   // 'login' | 'cadastro'
   authBusy: false,
@@ -351,23 +354,55 @@ async function submitTransaction(ev){
   const date = form.date.value || todayStr();
   if(!amount || amount<=0){ showToast('Informe um valor válido'); return; }
   const userId = state.session.user.id;
-  const payload = {
-    type: state.txType,
-    amount,
-    description: desc || (state.txType==='ganho'?'Ganho':'Gasto'),
-    date,
-    user_id: userId
-  };
-  const { data, error } = await supa.from('transactions').insert(payload).select().single();
-  if(error){ showToast('Erro ao salvar lançamento'); return; }
-  state.transactions.unshift({ id:data.id, type:data.type, amount:Number(data.amount), desc:data.description, date:data.date });
-  showToast(state.txType==='ganho' ? '✅ Ganho registrado' : '✅ Gasto registrado');
+
+  if(state.editingTxId){
+    const payload = {
+      type: state.txType,
+      amount,
+      description: desc || (state.txType==='ganho'?'Ganho':'Gasto'),
+      date
+    };
+    const { data, error } = await supa.from('transactions')
+      .update(payload)
+      .eq('id', state.editingTxId)
+      .select().single();
+    if(error){ showToast('Erro ao atualizar lançamento'); return; }
+    const t = state.transactions.find(x=>x.id===state.editingTxId);
+    if(t){ t.type=data.type; t.amount=Number(data.amount); t.desc=data.description; t.date=data.date; }
+    showToast('✅ Lançamento atualizado');
+    state.editingTxId = null;
+  } else {
+    const payload = {
+      type: state.txType,
+      amount,
+      description: desc || (state.txType==='ganho'?'Ganho':'Gasto'),
+      date,
+      user_id: userId
+    };
+    const { data, error } = await supa.from('transactions').insert(payload).select().single();
+    if(error){ showToast('Erro ao salvar lançamento'); return; }
+    state.transactions.unshift({ id:data.id, type:data.type, amount:Number(data.amount), desc:data.description, date:data.date });
+    showToast(state.txType==='ganho' ? '✅ Ganho registrado' : '✅ Gasto registrado');
+  }
   form.reset();
+  render();
+}
+function editTransaction(id){
+  const t = state.transactions.find(x=>x.id===id);
+  if(!t) return;
+  state.editingTxId = id;
+  state.txType = t.type;
+  state.tab = 'lancar';
+  render();
+}
+function cancelTxEdit(){
+  state.editingTxId = null;
   render();
 }
 async function deleteTransaction(id){
   const prev = state.transactions;
   state.transactions = state.transactions.filter(t=>t.id!==id);
+  if(state.editingTxId===id) state.editingTxId = null;
   render();
   const { error } = await supa.from('transactions').delete().eq('id', id);
   if(error){ state.transactions = prev; showToast('Erro ao excluir'); render(); }
@@ -498,6 +533,22 @@ function renderAuth(){
   </div>`;
 }
 
+function txRowHtml(t){
+  return `
+  <div class="tx-row">
+    <div class="tx-ic ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'📈':'📉'}</div>
+    <div class="tx-mid">
+      <div class="tx-desc">${escapeHtml(t.desc)}</div>
+      <div class="tx-date">${formatDateBR(t.date)}</div>
+    </div>
+    <div class="tx-amt ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'+':'-'} ${formatBRL(t.amount)}</div>
+    <span class="tx-actions">
+      <button class="tx-edit" onclick="editTransaction('${t.id}')" aria-label="Editar lançamento">✏️</button>
+      <button class="tx-del" onclick="deleteTransaction('${t.id}')" aria-label="Excluir lançamento">×</button>
+    </span>
+  </div>`;
+}
+
 function renderPainel(){
   const ym = todayStr().slice(0,7);
   const {ganho,gasto,saldo} = monthTotals(ym);
@@ -534,15 +585,7 @@ function renderPainel(){
   <div class="section-title">Últimos lançamentos</div>
   <div class="card">
     ${recentes.length===0 ? `<div class="empty-note">Nenhum lançamento ainda — bora começar? 🚀</div>` :
-      recentes.map(t=>`
-      <div class="tx-row">
-        <div class="tx-ic ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'📈':'📉'}</div>
-        <div class="tx-mid">
-          <div class="tx-desc">${escapeHtml(t.desc)}</div>
-          <div class="tx-date">${formatDateBR(t.date)}</div>
-        </div>
-        <div class="tx-amt ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'+':'-'} ${formatBRL(t.amount)}</div>
-      </div>`).join('')}
+      recentes.map(t=>txRowHtml(t)).join('')}
   </div>`;
 }
 
@@ -552,8 +595,11 @@ function renderLancar(){
     .filter(t=>t.date.slice(0,7)===doMonth)
     .sort((a,b)=>b.date<a.date?-1:1);
 
+  const editingTx = state.editingTxId ? state.transactions.find(t=>t.id===state.editingTxId) : null;
+
   return `
   <div class="card">
+    ${editingTx ? `<div class="empty-note" style="padding:0 0 10px;text-align:left;">Editando lançamento</div>` : ''}
     <form onsubmit="submitTransaction(event)">
       <div class="seg">
         <button type="button" class="${state.txType==='ganho'?'active ganho':''}" onclick="setTxType('ganho')">📈 Ganho</button>
@@ -561,33 +607,25 @@ function renderLancar(){
       </div>
       <div class="field">
         <label>Valor (R$)</label>
-        <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required>
+        <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required value="${editingTx?editingTx.amount:''}">
       </div>
       <div class="field">
         <label>Descrição</label>
-        <input type="text" name="desc" placeholder="${state.txType==='ganho'?'Ex: freelance, salário...':'Ex: mercado, transporte...'}">
+        <input type="text" name="desc" placeholder="${state.txType==='ganho'?'Ex: freelance, salário...':'Ex: mercado, transporte...'}" value="${editingTx?escapeHtml(editingTx.desc):''}">
       </div>
       <div class="field">
         <label>Data</label>
-        <input type="date" name="date" value="${todayStr()}">
+        <input type="date" name="date" value="${editingTx?editingTx.date:todayStr()}">
       </div>
-      <button class="btn-primary" type="submit">Registrar</button>
+      <button class="btn-primary" type="submit">${editingTx?'Salvar alterações':'Registrar'}</button>
+      ${editingTx ? `<button type="button" class="pill-btn" style="margin-top:8px;width:100%;text-align:center;" onclick="cancelTxEdit()">Cancelar edição</button>` : ''}
     </form>
   </div>
 
   <div class="section-title">Lançamentos de ${MESES_LONGO[new Date().getMonth()]}</div>
   <div class="card">
     ${list.length===0 ? `<div class="empty-note">Nenhum lançamento este mês</div>` :
-      list.map(t=>`
-      <div class="tx-row">
-        <div class="tx-ic ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'📈':'📉'}</div>
-        <div class="tx-mid">
-          <div class="tx-desc">${escapeHtml(t.desc)}</div>
-          <div class="tx-date">${formatDateBR(t.date)}</div>
-        </div>
-        <div class="tx-amt ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'+':'-'} ${formatBRL(t.amount)}</div>
-        <button class="tx-del" onclick="deleteTransaction('${t.id}')">×</button>
-      </div>`).join('')}
+      list.map(t=>txRowHtml(t)).join('')}
   </div>`;
 }
 
