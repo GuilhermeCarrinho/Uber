@@ -138,6 +138,15 @@ main{padding:14px 20px 10px;}
 .day-badge{font-size:10.5px;font-weight:700;padding:4px 8px;border-radius:10px;background:var(--line);color:var(--text-dim);}
 .day-badge.on{background:var(--gold-soft);color:#B5760A;}
 
+/* Divisão semanal da meta */
+.wk-title{font-family:'Baloo 2';font-weight:700;font-size:13px;color:var(--text);margin:16px 0 6px;}
+.wk-row{padding:10px 12px;border-radius:14px;background:var(--bg);margin-bottom:8px;}
+.wk-row.cur{background:var(--gold-soft);}
+.wk-head{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700;}
+.wk-days{font-size:11px;color:var(--text-dim);font-weight:700;}
+.hero-stat.m .ic{background:var(--gold-soft);}
+.hero-stat.m .v{color:#B5760A;}
+
 /* Week summary (painel) */
 .week-summary{display:flex;align-items:stretch;}
 .week-summary-item{flex:1;}
@@ -207,9 +216,9 @@ main{padding:14px 20px 10px;}
 // CONFIGURAÇÃO DO SUPABASE — troque pelos dados do SEU projeto
 // (Project Settings -> API, no painel do Supabase)
 // =====================================================================
-// ATENÇÃO: para os "dias de trabalho" da meta funcionarem, rode uma vez no
-// SQL Editor do Supabase (o campo não existia antes nessa tabela):
-//   ALTER TABLE weekly_goals ADD COLUMN work_days int[] DEFAULT '{}'::int[];
+// ATENÇÃO: a meta MENSAL é guardada na tabela weekly_goals, com week_start = dia 1 do mês.
+// A coluna work_days precisa existir (se ainda não rodou, execute uma vez no SQL Editor):
+//   ALTER TABLE weekly_goals ADD COLUMN IF NOT EXISTS work_days int[] DEFAULT '{}'::int[];
 const SUPABASE_URL = 'https://kpgsglrqmoprredxcabf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwZ3NnbHJxbW9wcnJlZHhjYWJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3ODg1ODcsImV4cCI6MjEwMzM2NDU4N30.8Wf6zqf2s8_mUbrMiSKCx2FDIqcd9iOKRAFxe3145NU';
 
@@ -230,10 +239,9 @@ const TAB_COLORS = {
 let state = {
   tab: 'painel',
   transactions: [],
-  weeklyGoals: [],
+  goals: [],            // metas mensais: { id, ym:'YYYY-MM', amount, workDays:[0..6] }
   year: new Date().getFullYear(),
   loading: true,
-  txType: 'ganho',
   showGoalForm: false,
   editingGoalId: null,
   goalFormDays: [],
@@ -246,52 +254,73 @@ let state = {
 
 // ---------- helpers ----------
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
 function pad2(n){ return String(n).padStart(2,'0'); }
+function localISO(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function todayStr(){ return localISO(new Date()); }
+function parseD(s){ return new Date(s+'T00:00:00'); }
 function formatBRL(n){ return (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 function formatDateBR(d){ const [y,m,day]=d.split('-'); return `${day}/${m}`; }
 function getMonday(dateStr){
-  const d = new Date(dateStr+'T00:00:00');
+  const d = parseD(dateStr);
   const day = d.getDay();
-  const diff = (day===0? -6 : 1-day);
-  d.setDate(d.getDate()+diff);
-  return d.toISOString().slice(0,10);
+  d.setDate(d.getDate() + (day===0 ? -6 : 1-day));
+  return localISO(d);
 }
 function addDays(dateStr,n){
-  const d = new Date(dateStr+'T00:00:00');
+  const d = parseD(dateStr);
   d.setDate(d.getDate()+n);
-  return d.toISOString().slice(0,10);
+  return localISO(d);
 }
 function dayOffset(weekStart, dateStr){
-  const d1 = new Date(weekStart+'T00:00:00');
-  const d2 = new Date(dateStr+'T00:00:00');
-  return Math.round((d2-d1)/86400000);
+  return Math.round((parseD(dateStr)-parseD(weekStart))/86400000);
+}
+function monthLabel(ym){
+  const [y,m] = ym.split('-').map(Number);
+  return `${MESES_LONGO[m-1]} ${y}`;
+}
+
+// ---------- ganhos ----------
+function ganhoBetween(from,to){
+  return state.transactions.filter(t=>t.date>=from && t.date<=to).reduce((s,t)=>s+t.amount,0);
+}
+function monthGanho(ym){
+  return state.transactions.filter(t=>t.date.slice(0,7)===ym).reduce((s,t)=>s+t.amount,0);
 }
 function todayGanho(){
   const today = todayStr();
-  return state.transactions.filter(t=>t.type==='ganho' && t.date===today).reduce((s,t)=>s+t.amount,0);
+  return state.transactions.filter(t=>t.date===today).reduce((s,t)=>s+t.amount,0);
 }
 
-function monthTotals(ym){
-  const trans = state.transactions.filter(t=>t.date.slice(0,7)===ym);
-  const ganho = trans.filter(t=>t.type==='ganho').reduce((s,t)=>s+t.amount,0);
-  const gasto = trans.filter(t=>t.type==='gasto').reduce((s,t)=>s+t.amount,0);
-  return {ganho,gasto,saldo:ganho-gasto};
+// ---------- metas (mensal -> semanas -> dias) ----------
+function goalForMonth(ym){ return state.goals.find(g=>g.ym===ym); }
+
+// Semanas (seg–dom) que tocam o mês; conta quantos dias de trabalho caem em cada uma, dentro do mês
+function monthWeeks(ym, workDays){
+  const [y,m] = ym.split('-').map(Number);
+  const first = `${ym}-01`;
+  const last = localISO(new Date(y, m, 0));
+  const weeks = [];
+  let ws = getMonday(first);
+  while(ws <= last){
+    const wEnd = addDays(ws,6);
+    let days = 0;
+    for(let i=0;i<7;i++){
+      const d = addDays(ws,i);
+      if(d>=first && d<=last && workDays.includes(i)) days++;
+    }
+    weeks.push({ ws, from: ws<first?first:ws, to: wEnd>last?last:wEnd, days });
+    ws = addDays(ws,7);
+  }
+  return weeks;
 }
-function weeklyGoalsForMonth(ym){
-  return state.weeklyGoals.filter(g=>g.weekStart.slice(0,7)===ym).sort((a,b)=>a.weekStart<b.weekStart?-1:1);
-}
-function weekActual(weekStart,type){
-  const end = addDays(weekStart,6);
-  return state.transactions.filter(t=>t.type===type && t.date>=weekStart && t.date<=end)
-    .reduce((s,t)=>s+t.amount,0);
-}
-function weekActualGanho(weekStart){ return weekActual(weekStart,'ganho'); }
-function weekActualGasto(weekStart){ return weekActual(weekStart,'gasto'); }
-function monthlyGoal(ym){
-  const goalsSum = weeklyGoalsForMonth(ym).reduce((s,g)=>s+g.amount,0);
-  const {gasto} = monthTotals(ym);
-  return goalsSum + gasto;
+// Meta do mês ÷ total de dias de trabalho = valor diário; cada semana = valor diário × dias da semana
+function goalPlan(goal){
+  const workDays = goal.workDays || [];
+  const weeks = monthWeeks(goal.ym, workDays).filter(w=>w.days>0);
+  const totalDays = weeks.reduce((s,w)=>s+w.days,0);
+  const daily = totalDays>0 ? goal.amount/totalDays : 0;
+  weeks.forEach(w=>{ w.target = daily*w.days; w.actual = ganhoBetween(w.from,w.to); });
+  return { weeks, totalDays, daily };
 }
 
 // ---------- Supabase: auth ----------
@@ -303,7 +332,7 @@ async function initAuth(){
     if(session){ loadAll(); }
     else{
       state.transactions = [];
-      state.weeklyGoals = [];
+      state.goals = [];
       state.loading = false;
       render();
     }
@@ -360,9 +389,13 @@ async function loadAll(){
     ]);
     if(e1) throw e1;
     if(e2) throw e2;
-    state.transactions = (tx||[]).map(r=>({ id:r.id, type:r.type, amount:Number(r.amount), desc:r.description || '', date:r.date }));
-    state.weeklyGoals = (goals||[]).map(r=>({ id:r.id, weekStart:r.week_start, amount:Number(r.amount), workDays:r.work_days||[] }))
-      .sort((a,b)=>a.weekStart<b.weekStart?-1:1);
+    // só ganhos (lançamentos antigos de gasto são ignorados)
+    state.transactions = (tx||[]).filter(r=>r.type==='ganho')
+      .map(r=>({ id:r.id, type:'ganho', amount:Number(r.amount), desc:r.description || '', date:r.date }));
+    // metas mensais ficam guardadas com week_start = dia 1 do mês (metas semanais antigas são ignoradas)
+    state.goals = (goals||[]).filter(r=>String(r.week_start).slice(8,10)==='01')
+      .map(r=>({ id:r.id, ym:String(r.week_start).slice(0,7), amount:Number(r.amount), workDays:r.work_days||[] }))
+      .sort((a,b)=>a.ym<b.ym?-1:1);
   }catch(e){
     showToast('Erro ao carregar dados');
   }
@@ -380,7 +413,6 @@ function showToast(msg){
 
 // ---------- actions ----------
 function setTab(tab){ state.tab = tab; render(); }
-function setTxType(type){ state.txType = type; render(); }
 
 async function submitTransaction(ev){
   ev.preventDefault();
@@ -392,33 +424,22 @@ async function submitTransaction(ev){
   const userId = state.session.user.id;
 
   if(state.editingTxId){
-    const payload = {
-      type: state.txType,
-      amount,
-      description: desc || (state.txType==='ganho'?'Ganho':'Gasto'),
-      date
-    };
+    const payload = { type:'ganho', amount, description: desc || 'Ganho', date };
     const { data, error } = await supa.from('transactions')
       .update(payload)
       .eq('id', state.editingTxId)
       .select().single();
     if(error){ showToast('Erro ao atualizar lançamento'); return; }
     const t = state.transactions.find(x=>x.id===state.editingTxId);
-    if(t){ t.type=data.type; t.amount=Number(data.amount); t.desc=data.description; t.date=data.date; }
+    if(t){ t.amount=Number(data.amount); t.desc=data.description; t.date=data.date; }
     showToast('✅ Lançamento atualizado');
     state.editingTxId = null;
   } else {
-    const payload = {
-      type: state.txType,
-      amount,
-      description: desc || (state.txType==='ganho'?'Ganho':'Gasto'),
-      date,
-      user_id: userId
-    };
+    const payload = { type:'ganho', amount, description: desc || 'Ganho', date, user_id: userId };
     const { data, error } = await supa.from('transactions').insert(payload).select().single();
     if(error){ showToast('Erro ao salvar lançamento'); return; }
-    state.transactions.unshift({ id:data.id, type:data.type, amount:Number(data.amount), desc:data.description, date:data.date });
-    showToast(state.txType==='ganho' ? '✅ Ganho registrado' : '✅ Gasto registrado');
+    state.transactions.unshift({ id:data.id, type:'ganho', amount:Number(data.amount), desc:data.description, date:data.date });
+    showToast('✅ Ganho registrado');
   }
   form.reset();
   render();
@@ -427,7 +448,6 @@ function editTransaction(id){
   const t = state.transactions.find(x=>x.id===id);
   if(!t) return;
   state.editingTxId = id;
-  state.txType = t.type;
   state.tab = 'lancar';
   render();
 }
@@ -446,12 +466,16 @@ async function deleteTransaction(id){
 
 function toggleGoalForm(){
   state.showGoalForm = !state.showGoalForm;
-  if(state.showGoalForm && !state.editingGoalId){ state.goalFormDays = []; }
+  if(state.showGoalForm && !state.editingGoalId){
+    // sugere os mesmos dias da meta do mês atual, se existir
+    const cur = goalForMonth(todayStr().slice(0,7));
+    state.goalFormDays = cur ? [...cur.workDays] : [];
+  }
   if(!state.showGoalForm){ state.editingGoalId = null; state.goalFormDays = []; }
   render();
 }
 function editGoal(id){
-  const g = state.weeklyGoals.find(x=>x.id===id);
+  const g = state.goals.find(x=>x.id===id);
   state.editingGoalId = id;
   state.goalFormDays = g && g.workDays ? [...g.workDays] : [];
   state.showGoalForm = true;
@@ -473,48 +497,47 @@ function toggleGoalDay(offset){
 async function submitGoal(ev){
   ev.preventDefault();
   const form = ev.target;
-  const dateVal = form.refDate.value || todayStr();
+  const ym = form.refMonth.value || todayStr().slice(0,7);
   const amount = parseFloat(form.amount.value.replace(',','.'));
   if(!amount || amount<=0){ showToast('Informe um valor válido'); return; }
   if(state.goalFormDays.length===0){ showToast('Selecione ao menos um dia de trabalho'); return; }
-  const weekStart = getMonday(dateVal);
+  const weekStart = `${ym}-01`;   // meta mensal guardada no dia 1 do mês
   const workDays = [...state.goalFormDays];
   const userId = state.session.user.id;
 
   if(state.editingGoalId){
-    // Editando uma meta existente (pode inclusive mover para outra semana)
     const { data, error } = await supa.from('weekly_goals')
       .update({ week_start:weekStart, amount, work_days:workDays })
       .eq('id', state.editingGoalId)
       .select().single();
-    if(error){ showToast('Erro ao atualizar meta (já existe outra meta nessa semana?)'); return; }
-    const g = state.weeklyGoals.find(x=>x.id===state.editingGoalId);
-    if(g){ g.weekStart = data.week_start; g.amount = Number(data.amount); g.workDays = data.work_days||[]; }
+    if(error){ showToast('Erro ao atualizar meta (já existe outra meta nesse mês?)'); return; }
+    const g = state.goals.find(x=>x.id===state.editingGoalId);
+    if(g){ g.ym = String(data.week_start).slice(0,7); g.amount = Number(data.amount); g.workDays = data.work_days||[]; }
     showToast('🎯 Meta atualizada');
   } else {
-    // Nova meta (uma por semana; se já existir meta pra essa semana, ela é atualizada)
+    // uma meta por mês; se já existir, ela é atualizada
     const { data, error } = await supa.from('weekly_goals')
       .upsert({ user_id:userId, week_start:weekStart, amount, work_days:workDays }, { onConflict:'user_id,week_start' })
       .select().single();
     if(error){ showToast('Erro ao salvar meta'); return; }
-    const existing = state.weeklyGoals.find(g=>g.weekStart===weekStart);
+    const existing = state.goals.find(g=>g.ym===ym);
     if(existing){ existing.amount = Number(data.amount); existing.id = data.id; existing.workDays = data.work_days||[]; }
-    else{ state.weeklyGoals.push({ id:data.id, weekStart:data.week_start, amount:Number(data.amount), workDays:data.work_days||[] }); }
+    else{ state.goals.push({ id:data.id, ym, amount:Number(data.amount), workDays:data.work_days||[] }); }
     showToast('🎯 Meta salva');
   }
-  state.weeklyGoals.sort((a,b)=>a.weekStart<b.weekStart?-1:1);
+  state.goals.sort((a,b)=>a.ym<b.ym?-1:1);
   state.showGoalForm = false;
   state.editingGoalId = null;
   state.goalFormDays = [];
   render();
 }
 async function deleteGoal(id){
-  const prev = state.weeklyGoals;
-  state.weeklyGoals = state.weeklyGoals.filter(g=>g.id!==id);
+  const prev = state.goals;
+  state.goals = state.goals.filter(g=>g.id!==id);
   if(state.editingGoalId===id){ state.editingGoalId = null; state.showGoalForm = false; }
   render();
   const { error } = await supa.from('weekly_goals').delete().eq('id', id);
-  if(error){ state.weeklyGoals = prev; showToast('Erro ao excluir meta'); render(); }
+  if(error){ state.goals = prev; showToast('Erro ao excluir meta'); render(); }
 }
 function changeYear(delta){ state.year += delta; render(); }
 
@@ -586,12 +609,12 @@ function renderAuth(){
 function txRowHtml(t){
   return `
   <div class="tx-row">
-    <div class="tx-ic ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'📈':'📉'}</div>
+    <div class="tx-ic g">📈</div>
     <div class="tx-mid">
       <div class="tx-desc">${escapeHtml(t.desc)}</div>
       <div class="tx-date">${formatDateBR(t.date)}</div>
     </div>
-    <div class="tx-amt ${t.type==='ganho'?'g':'d'}">${t.type==='ganho'?'+':'-'} ${formatBRL(t.amount)}</div>
+    <div class="tx-amt g">+ ${formatBRL(t.amount)}</div>
     <span class="tx-actions">
       <button class="tx-edit" onclick="editTransaction('${t.id}')" aria-label="Editar lançamento">✏️</button>
       <button class="tx-del" onclick="deleteTransaction('${t.id}')" aria-label="Excluir lançamento">×</button>
@@ -600,10 +623,15 @@ function txRowHtml(t){
 }
 
 function weekSummaryCardHtml(){
-  const weekStart = getMonday(todayStr());
+  const today = todayStr();
+  const ym = today.slice(0,7);
+  const weekStart = getMonday(today);
   const wEnd = addDays(weekStart,6);
-  const gWeek = weekActualGanho(weekStart);
-  const dWeek = weekActualGasto(weekStart);
+  const goal = goalForMonth(ym);
+  const week = goal ? goalPlan(goal).weeks.find(w=>w.ws===weekStart) : null;
+  const gWeek = week ? week.actual : ganhoBetween(weekStart,wEnd);
+  const meta = week ? week.target : 0;
+  const falta = Math.max(0, meta-gWeek);
   return `
   <div class="section-title">Esta semana<span class="pill-btn" style="background:none;color:var(--text-dim);font-weight:700;">${formatDateBR(weekStart)} – ${formatDateBR(wEnd)}</span></div>
   <div class="card week-summary">
@@ -613,37 +641,37 @@ function weekSummaryCardHtml(){
     </div>
     <div class="week-summary-divider"></div>
     <div class="week-summary-item">
-      <div class="k">Gastos</div>
-      <div class="v d">${formatBRL(dWeek)}</div>
+      <div class="k">Meta da semana</div>
+      <div class="v">${week ? formatBRL(meta) : '—'}</div>
     </div>
     <div class="week-summary-divider"></div>
     <div class="week-summary-item">
-      <div class="k">Saldo</div>
-      <div class="v" style="color:${(gWeek-dWeek)<0?'var(--gasto)':'var(--text)'}">${formatBRL(gWeek-dWeek)}</div>
+      <div class="k">Falta</div>
+      <div class="v" style="color:var(--gold)">${week ? formatBRL(falta) : '—'}</div>
     </div>
   </div>`;
 }
 
 function dailyGoalCardHtml(){
-  const weekStart = getMonday(todayStr());
-  const goal = state.weeklyGoals.find(g=>g.weekStart===weekStart);
+  const today = todayStr();
+  const goal = goalForMonth(today.slice(0,7));
 
   if(!goal){
     return `<div class="section-title">Meta diária</div>
-    <div class="card"><div class="empty-note">Defina sua meta semanal na aba <b>Metas</b> para ver quanto precisa fazer por dia 🎯</div></div>`;
+    <div class="card"><div class="empty-note">Defina sua meta mensal na aba <b>Metas</b> para ver quanto precisa fazer por dia 🎯</div></div>`;
   }
   const workDays = goal.workDays || [];
   if(workDays.length===0){
     return `<div class="section-title">Meta diária</div>
-    <div class="card"><div class="empty-note">Escolha os dias de trabalho desta meta na aba <b>Metas</b> para calcular o valor diário 📅</div></div>`;
+    <div class="card"><div class="empty-note">Escolha os dias de trabalho na aba <b>Metas</b> para calcular o valor diário 📅</div></div>`;
   }
 
-  const dailyTarget = goal.amount / workDays.length;
-  const offset = dayOffset(weekStart, todayStr());
+  const { daily, totalDays } = goalPlan(goal);
+  const offset = dayOffset(getMonday(today), today);
   const isWorkToday = workDays.includes(offset);
   const ganhoHoje = todayGanho();
-  const pct = dailyTarget>0 ? Math.min(100, Math.round((ganhoHoje/dailyTarget)*100)) : 0;
-  const bateu = ganhoHoje >= dailyTarget;
+  const pct = daily>0 ? Math.min(100, Math.round((ganhoHoje/daily)*100)) : 0;
+  const bateu = ganhoHoje >= daily;
 
   let statusClass, statusMsg;
   if(!isWorkToday){
@@ -651,14 +679,14 @@ function dailyGoalCardHtml(){
   } else if(bateu){
     statusClass = 'hit'; statusMsg = '🎉 Meta de hoje batida!';
   } else {
-    statusClass = 'pending'; statusMsg = `Faltam ${formatBRL(Math.max(0,dailyTarget-ganhoHoje))} para bater a meta de hoje`;
+    statusClass = 'pending'; statusMsg = `Faltam ${formatBRL(Math.max(0,daily-ganhoHoje))} para bater a meta de hoje`;
   }
 
   return `
   <div class="section-title">Meta diária</div>
   <div class="card">
     <div class="goal-nums" style="margin-top:0;">
-      <span>Preciso fazer por dia (÷${workDays.length}d)</span><b>${formatBRL(dailyTarget)}</b>
+      <span>Preciso fazer por dia (÷${totalDays}d no mês)</span><b>${formatBRL(daily)}</b>
     </div>
     ${isWorkToday ? `
     <div class="bar-track"><div class="bar-fill ${bateu?'':'amber'}" style="width:${pct}%"></div></div>
@@ -669,24 +697,26 @@ function dailyGoalCardHtml(){
 
 function renderPainel(){
   const ym = todayStr().slice(0,7);
-  const {ganho,gasto,saldo} = monthTotals(ym);
-  const meta = monthlyGoal(ym);
+  const ganho = monthGanho(ym);
+  const goal = goalForMonth(ym);
+  const meta = goal ? goal.amount : 0;
   const metaPct = meta>0 ? Math.min(100, Math.round((ganho/meta)*100)) : 0;
   const metaFalta = Math.max(0, meta-ganho);
   const recentes = [...state.transactions].sort((a,b)=>b.date<a.date?-1:1).slice(0,6);
-  const nota = saldo>=0 ? 'Você está no azul esse mês 🎉' : 'Fique de olho, saldo negativo 👀';
+  const nota = !goal ? 'Defina a meta do mês na aba Metas 🎯'
+    : (ganho>=meta ? 'Meta do mês batida! 🎉' : `Você já fez ${metaPct}% da meta do mês 💪`);
 
   return `
   <div class="hero">
     <div class="hero-top">
       <div class="hero-badge">🐷</div>
-      <div class="hero-label">Saldo de ${MESES_LONGO[new Date().getMonth()]}</div>
+      <div class="hero-label">Ganhos de ${MESES_LONGO[new Date().getMonth()]}</div>
     </div>
-    <div class="hero-amount ${saldo<0?'neg':''}">${formatBRL(saldo)}</div>
+    <div class="hero-amount">${formatBRL(ganho)}</div>
     <div class="hero-note">${nota}</div>
     <div class="hero-stats">
-      <div class="hero-stat g"><div class="ic">📈</div><div class="txt"><div class="k">Ganhos</div><div class="v">${formatBRL(ganho)}</div></div></div>
-      <div class="hero-stat d"><div class="ic">📉</div><div class="txt"><div class="k">Gastos</div><div class="v">${formatBRL(gasto)}</div></div></div>
+      <div class="hero-stat m"><div class="ic">🎯</div><div class="txt"><div class="k">Meta do mês</div><div class="v">${goal ? formatBRL(meta) : '—'}</div></div></div>
+      <div class="hero-stat g"><div class="ic">⏳</div><div class="txt"><div class="k">Falta</div><div class="v">${goal ? formatBRL(metaFalta) : '—'}</div></div></div>
     </div>
   </div>
 
@@ -696,12 +726,14 @@ function renderPainel(){
 
   <div class="section-title">Meta mensal</div>
   <div class="card">
+    ${goal ? `
     <div class="goal-nums" style="margin-top:0;">
-      <span>Metas semanais + gastos</span><b>${formatBRL(meta)}</b>
+      <span>Meta do mês</span><b>${formatBRL(meta)}</b>
     </div>
     <div class="bar-track"><div class="bar-fill amber" style="width:${metaPct}%"></div></div>
     <div class="goal-nums"><span>Ganho no mês</span><b style="color:var(--ganho)">${metaPct}% da meta</b></div>
-    <div class="goal-nums two"><span>Falta para bater a meta</span><b style="color:var(--gold)">${formatBRL(metaFalta)}</b></div>
+    <div class="goal-nums two"><span>Falta para bater a meta</span><b style="color:var(--gold)">${formatBRL(metaFalta)}</b></div>`
+    : `<div class="empty-note">Nenhuma meta definida para este mês</div>`}
   </div>
 
   <div class="section-title">Últimos lançamentos</div>
@@ -723,23 +755,19 @@ function renderLancar(){
   <div class="card">
     ${editingTx ? `<div class="empty-note" style="padding:0 0 10px;text-align:left;">Editando lançamento</div>` : ''}
     <form onsubmit="submitTransaction(event)">
-      <div class="seg">
-        <button type="button" class="${state.txType==='ganho'?'active ganho':''}" onclick="setTxType('ganho')">📈 Ganho</button>
-        <button type="button" class="${state.txType==='gasto'?'active gasto':''}" onclick="setTxType('gasto')">📉 Gasto</button>
-      </div>
       <div class="field">
-        <label>Valor (R$)</label>
+        <label>Valor ganho (R$)</label>
         <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required value="${editingTx?editingTx.amount:''}">
       </div>
       <div class="field">
         <label>Descrição</label>
-        <input type="text" name="desc" placeholder="${state.txType==='ganho'?'Ex: freelance, salário...':'Ex: mercado, transporte...'}" value="${editingTx?escapeHtml(editingTx.desc):''}">
+        <input type="text" name="desc" placeholder="Ex: corridas do dia, freelance..." value="${editingTx?escapeHtml(editingTx.desc):''}">
       </div>
       <div class="field">
         <label>Data</label>
         <input type="date" name="date" value="${editingTx?editingTx.date:todayStr()}">
       </div>
-      <button class="btn-primary" type="submit">${editingTx?'Salvar alterações':'Registrar'}</button>
+      <button class="btn-primary" type="submit">${editingTx?'Salvar alterações':'Registrar ganho'}</button>
       ${editingTx ? `<button type="button" class="pill-btn" style="margin-top:8px;width:100%;text-align:center;" onclick="cancelTxEdit()">Cancelar edição</button>` : ''}
     </form>
   </div>
@@ -751,70 +779,83 @@ function renderLancar(){
   </div>`;
 }
 
-function goalCardHtml(weekStart, amount, goalId, workDays){
-  workDays = workDays || [];
-  const actual = weekActualGanho(weekStart);
-  const gasto = weekActualGasto(weekStart);
-  const falta = Math.max(0, amount-actual);
-  const pct = amount>0 ? Math.min(100, Math.round((actual/amount)*100)) : 0;
-  const end = addDays(weekStart,6);
-  const dailyTarget = workDays.length>0 ? amount/workDays.length : 0;
+function goalCardHtml(goal){
+  const workDays = goal.workDays || [];
+  const { weeks, totalDays, daily } = goalPlan(goal);
+  const actual = monthGanho(goal.ym);
+  const falta = Math.max(0, goal.amount-actual);
+  const pct = goal.amount>0 ? Math.min(100, Math.round((actual/goal.amount)*100)) : 0;
+  const currentWeek = getMonday(todayStr());
+
   return `
   <div class="card goal-card">
     <div class="goal-head">
-      <span class="goal-week"><span class="ic">🎯</span> ${formatDateBR(weekStart)} a ${formatDateBR(end)}</span>
-      ${goalId ? `
+      <span class="goal-week"><span class="ic">🎯</span> ${monthLabel(goal.ym)}</span>
       <span class="goal-actions">
-        <button class="goal-edit" onclick="editGoal('${goalId}')" aria-label="Editar meta">✏️</button>
-        <button class="tx-del" onclick="deleteGoal('${goalId}')" aria-label="Excluir meta">×</button>
-      </span>` : ''}
+        <button class="goal-edit" onclick="editGoal('${goal.id}')" aria-label="Editar meta">✏️</button>
+        <button class="tx-del" onclick="deleteGoal('${goal.id}')" aria-label="Excluir meta">×</button>
+      </span>
     </div>
     <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
     <div class="goal-nums">
-      <span>Planejado: <b>${formatBRL(amount)}</b></span>
+      <span>Meta: <b>${formatBRL(goal.amount)}</b></span>
       <span>Ganho: <b style="color:var(--ganho)">${formatBRL(actual)}</b></span>
     </div>
     <div class="goal-nums two">
-      <span>Gasto: <b style="color:var(--gasto)">${formatBRL(gasto)}</b></span>
+      <span>${pct}% da meta</span>
       <span>Falta: <b style="color:var(--gold)">${formatBRL(falta)}</b></span>
     </div>
-    ${workDays.length>0 ? `
     <div class="goal-days">
       ${DIAS_SEMANA.map((d,i)=>`<span class="day-badge ${workDays.includes(i)?'on':''}">${d}</span>`).join('')}
     </div>
     <div class="goal-nums two" style="margin-top:8px;">
-      <span>Meta diária (÷${workDays.length}d)</span><b>${formatBRL(dailyTarget)}</b>
-    </div>` : `
-    <div class="empty-note" style="padding:8px 0 0;">Nenhum dia de trabalho definido para esta meta</div>`}
+      <span>Meta diária (÷${totalDays}d no mês)</span><b>${formatBRL(daily)}</b>
+    </div>
+    <div class="wk-title">Divisão por semana (${weeks.length})</div>
+    ${weeks.map((w,i)=>{
+      const wp = w.target>0 ? Math.min(100, Math.round((w.actual/w.target)*100)) : 0;
+      const isCur = w.ws===currentWeek;
+      return `
+      <div class="wk-row ${isCur?'cur':''}">
+        <div class="wk-head">
+          <span class="wk-name">Sem ${i+1} · ${formatDateBR(w.from)}–${formatDateBR(w.to)}${isCur?' · atual':''}</span>
+          <span class="wk-days">${w.days} ${w.days===1?'dia':'dias'}</span>
+        </div>
+        <div class="bar-track" style="height:7px;margin-top:6px;"><div class="bar-fill amber" style="width:${wp}%"></div></div>
+        <div class="goal-nums" style="margin-top:5px;">
+          <span>Meta: <b>${formatBRL(w.target)}</b></span>
+          <span>Ganho: <b style="color:var(--ganho)">${formatBRL(w.actual)}</b></span>
+        </div>
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
 function renderMetas(){
-  const currentWeekStart = getMonday(todayStr());
-  const currentGoal = state.weeklyGoals.find(g=>g.weekStart===currentWeekStart);
-  const currentPlanned = currentGoal ? currentGoal.amount : 0;
+  const currentYm = todayStr().slice(0,7);
+  const currentGoal = goalForMonth(currentYm);
 
-  const editingGoal = state.editingGoalId ? state.weeklyGoals.find(g=>g.id===state.editingGoalId) : null;
-  const formDate = editingGoal ? editingGoal.weekStart : todayStr();
+  const editingGoal = state.editingGoalId ? state.goals.find(g=>g.id===state.editingGoalId) : null;
+  const formMonth = editingGoal ? editingGoal.ym : currentYm;
   const formAmount = editingGoal ? editingGoal.amount : '';
 
-  const outras = state.weeklyGoals
-    .filter(g=>g.weekStart!==currentWeekStart)
-    .sort((a,b)=>b.weekStart<a.weekStart?-1:1);
+  const outras = state.goals
+    .filter(g=>g.ym!==currentYm)
+    .sort((a,b)=>b.ym<a.ym?-1:1);
 
   return `
-  <div class="section-title">Semana atual<span class="pill-btn" onclick="toggleGoalForm()">${state.showGoalForm?'fechar':'+ nova meta'}</span></div>
+  <div class="section-title">Mês atual<span class="pill-btn" onclick="toggleGoalForm()">${state.showGoalForm?'fechar':'+ nova meta'}</span></div>
 
   ${state.showGoalForm ? `
   <div class="card" style="margin-bottom:14px;">
     <form onsubmit="submitGoal(event)">
       ${editingGoal ? `<div class="empty-note" style="padding:0 0 10px;text-align:left;">Editando meta existente</div>` : ''}
       <div class="field">
-        <label>Qualquer data da semana desejada</label>
-        <input type="date" name="refDate" value="${formDate}" required>
+        <label>Mês da meta</label>
+        <input type="month" name="refMonth" value="${formMonth}" required>
       </div>
       <div class="field">
-        <label>Valor planejado (R$)</label>
+        <label>Meta do mês (R$)</label>
         <input type="number" step="0.01" min="0" name="amount" inputmode="decimal" placeholder="0,00" required value="${formAmount}">
       </div>
       <div class="field">
@@ -828,11 +869,11 @@ function renderMetas(){
     </form>
   </div>` : ''}
 
-  ${goalCardHtml(currentWeekStart, currentPlanned, currentGoal ? currentGoal.id : null, currentGoal ? currentGoal.workDays : [])}
+  ${currentGoal ? goalCardHtml(currentGoal) : `<div class="card goal-card"><div class="empty-note">Nenhuma meta definida para ${monthLabel(currentYm)}. Toque em <b>+ nova meta</b> 🎯</div></div>`}
 
-  <div class="section-title">Outras metas</div>
+  <div class="section-title">Outros meses</div>
   ${outras.length===0 ? `<div class="card"><div class="empty-note">Nenhuma outra meta cadastrada</div></div>` :
-    outras.map(g=>goalCardHtml(g.weekStart, g.amount, g.id, g.workDays)).join('')}
+    outras.map(g=>goalCardHtml(g)).join('')}
   `;
 }
 
@@ -842,12 +883,12 @@ function renderAno(){
   const rows = [];
   for(let m=0;m<12;m++){
     const ym = `${year}-${pad2(m+1)}`;
-    const t = monthTotals(ym);
-    maxVal = Math.max(maxVal, t.ganho, t.gasto);
-    rows.push({m,...t});
+    const ganho = monthGanho(ym);
+    const goal = goalForMonth(ym);
+    maxVal = Math.max(maxVal, ganho);
+    rows.push({m, ganho, meta: goal ? goal.amount : 0});
   }
   const yearGanho = rows.reduce((s,r)=>s+r.ganho,0);
-  const yearGasto = rows.reduce((s,r)=>s+r.gasto,0);
 
   return `
   <div class="year-nav">
@@ -859,13 +900,9 @@ function renderAno(){
   <div class="hero" style="margin-bottom:18px;">
     <div class="hero-top">
       <div class="hero-badge">📅</div>
-      <div class="hero-label">Saldo do ano</div>
+      <div class="hero-label">Ganhos do ano</div>
     </div>
-    <div class="hero-amount ${ (yearGanho-yearGasto)<0?'neg':''}" style="font-size:34px;">${formatBRL(yearGanho-yearGasto)}</div>
-    <div class="hero-stats">
-      <div class="hero-stat g"><div class="ic">📈</div><div class="txt"><div class="k">Ganhos</div><div class="v">${formatBRL(yearGanho)}</div></div></div>
-      <div class="hero-stat d"><div class="ic">📉</div><div class="txt"><div class="k">Gastos</div><div class="v">${formatBRL(yearGasto)}</div></div></div>
-    </div>
+    <div class="hero-amount" style="font-size:34px;">${formatBRL(yearGanho)}</div>
   </div>
 
   <div class="section-title">Por mês</div>
@@ -878,10 +915,10 @@ function renderAno(){
             <div class="mb-track"><div class="mb-fill" style="width:${(r.ganho/maxVal)*100}%;background:var(--ganho);"></div></div>
             <div class="mb-val" style="color:var(--ganho)">${formatBRL(r.ganho)}</div>
           </div>
-          <div class="mb-row">
-            <div class="mb-track"><div class="mb-fill" style="width:${(r.gasto/maxVal)*100}%;background:var(--gasto);"></div></div>
-            <div class="mb-val" style="color:var(--gasto)">${formatBRL(r.gasto)}</div>
-          </div>
+          ${r.meta>0 ? `<div class="mb-row">
+            <div class="mb-track"><div class="mb-fill" style="width:${Math.min(100,(r.meta/maxVal)*100)}%;background:var(--gold);"></div></div>
+            <div class="mb-val" style="color:#B5760A">${formatBRL(r.meta)}</div>
+          </div>` : ''}
         </div>
       </div>`).join('')}
   </div>`;
